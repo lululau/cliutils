@@ -1,0 +1,443 @@
+#!/usr/bin/perl
+
+#本脚本的功能是设置“标准”格式的mp3 id3标签或者将mp3文件的现有标签转换为
+#“标准”格式。“标准”格式也就是采用带BOM的UTF-16LE编码字符串的id3v2.3.0标签格式。
+#iTunes(Mac OS X)、Vox(Mac OS X)、Mac QuickLook(Mac OS X)、
+#Totem Player(GNU/Linux/GNOME)、Rhythmbox(GNU/Linux/GNOME)、
+#TTPlayer(Windows)、SonicStage(Windows)等多数播放器都支持这种“标准”格式。
+#注意：本脚本只能在UTF-8环境的SHELL上运行。
+
+BEGIN {
+
+  #Windows以及Windows上的某些播放器仅支持id3v2 2.3.0的0(ISO-8859-1)和1(UTF-16 with BOM)两种编码格式，
+  #当然它们更不支持2.4.0；
+  #Mac的QuickLook对UTF-16BE的1编码的id3v2 2.3.0支持不好；
+  #因此我们统一使用UTF-16LE 1号编码的id3v2 2.3.0
+  #此外，MP3::Tag::ID3v2.pm中的as_bin子过程（804行）错误地将UTF-16LE BOM("\xff\xfe")转换为"\xff\x00\xfe"，
+  #因此，在这里重新定义了as_bin子过程：
+  #    $flags = chr(128) if ($self->get_config('id3v23_unsync'))->[0]
+  #       and $tag_data =~ s/\xFF(?=[\x00\xE0-\xFD\xFF])/\xFF\x00/g;
+  #注意！这种hack行为有可能导致其它BUG，本脚本仅仅支持有限的几种id3v2 frame，目前尚未发现其它问题。
+  $ENV{MP3TAG_USE_UTF_16LE} = 1;
+}
+
+use strict;
+use warnings;
+
+use utf8;
+
+use Encode qw(encode decode from_to);
+
+use Getopt::Long;
+
+use MP3::Tag;
+
+use File::Basename;
+
+
+binmode STDOUT, ":encoding(utf8)";
+
+package MP3::Tag::ID3v2;
+{
+  no warnings qw(redefine);
+  sub as_bin ($;$$$) {
+    my ($self, $ignore_error, $update_file, $raw_ok) = @_;
+
+    return $self->{raw_data}
+      if $raw_ok and $self->{raw_data} and not $self->{modified} and not $update_file;
+
+    die "Writing of ID3v2.4 is not fully supported (prohibited now via `write_v24').\n"
+      if $self->{major} == 4 and not $self->get_config1('write_v24');
+    if ($self->{major} > 4) {
+      warn "Only writing of ID3v2.3 (and some tags of v2.4) is supported. Cannot convert ID3v".
+        $self->{version}." to ID3v2.3 yet.\n";
+      return undef;
+    }
+
+    # which order should tags have?
+
+    $self->get_frame_ids;
+    my $tag_data = $self->build_tag($ignore_error);
+    return unless defined $tag_data;
+
+    # printing this will ruin flags if they are \x80 or above.
+    die "panic: prepared raw tag contains wide characters"
+      if $tag_data =~ /[^\x00-\xFF]/;
+    # perhaps search for first mp3 data frame to check if tag size is not
+    # too big and will override the mp3 data
+    #ext header are not supported yet
+    my $flags = chr(0);
+    #   $flags = chr(128) if ($self->get_config('id3v23_unsync'))->[0]############################## Commented by 刘向
+    #     and $tag_data =~ s/\xFF(?=[\x00\xE0-\xFF])/\xFF\x00/g;     # sync flag#################### Commented by 刘向
+    $flags = chr(128) if ($self->get_config('id3v23_unsync'))->[0] ############################## Added by 刘向
+      and $tag_data =~ s/\xFF(?=[\x00\xE0-\xFD\xFF])/\xFF\x00/g; ############################## Added by 刘向
+    $tag_data .= "\0"           # Terminated by 0xFF?
+      if length $tag_data and chr(0xFF) eq substr $tag_data, -1, 1;
+    my $n_tsize = length $tag_data;
+
+    my $header = 'ID3' . chr(3) . chr(0);
+
+    if ($update_file) {
+      my $o_tsize = $self->{buggy_padding_size} + $self->{tagsize};
+      my $add_padding = 0;
+      if ( $o_tsize < $n_tsize
+           or ($self->get_config('id3v2_shrink'))->[0] ) {
+        # if creating new tag / increasing size add at least 128b padding
+        # add additional bytes to make new filesize multiple of 512b
+        my $mp3obj = $self->{mp3};
+        my $filesize = (stat($mp3obj->{filename}))[7];
+        my $extra = ($self->get_config('id3v2_minpadding'))->[0];
+        my $n_filesize = ($filesize + $n_tsize - $o_tsize + $extra);
+        my $round = ($self->get_config('id3v2_sizemult'))->[0];
+        $n_filesize = (($n_filesize + $round - 1) & ~($round - 1));
+        my $n_padding = $n_filesize - $filesize - ($n_tsize - $o_tsize);
+        $n_tsize += $n_padding;
+        if ($o_tsize != $n_tsize) {
+          my @insert = [0, $o_tsize+10, $n_tsize + 10];
+          return undef unless insert_space($self, \@insert) == 0;
+        } else {           # Slot is not filled by 0; fill it manually
+          $add_padding = $n_padding - $self->{buggy_padding_size};
+        }
+        $self->{tagsize} = $n_tsize;
+      } else {                # Include current "padding" into n_tsize
+        $add_padding = $self->{tagsize} - $n_tsize;
+        $n_tsize = $self->{tagsize} = $o_tsize;
+      }
+      $add_padding = 0 if $add_padding < 0;
+      $tag_data .= "\0" x $add_padding if $update_file =~ /padding/;
+    }
+
+    #convert size to header format specific size
+    my $size = unpack('B32', pack ('N', $n_tsize));
+    substr ($size, -$_, 0) = '0' for (qw/28 21 14 7/);
+    $size= pack('B32', substr ($size, -32));
+
+    return "$header$flags$size$tag_data";
+  }
+}
+
+package main;
+
+
+my($mp3, $id3v2, $title, $player, $album, $year, $genre, $cover, $track_num);
+my($rela_path, $abso_path, $parent_name);
+
+sub usage{
+  print <<'EOF';
+用法: itagedit [选项]... [mp3文件名]
+标准ID3标签编辑器
+示例: itagedit -t '風の記憶' -p '熊木杏里' -a '風の中の行進' 風の記憶.mp3
+      itagedit -o GBK 好久不见.mp3
+
+基本选项：
+  -t 设置标题
+  -p 设置艺术家
+  -a 设置唱片名
+  -c 设置封面图片
+  -y 设置唱片年份
+  -g 设置歌曲风格
+  -n 设置音轨号
+
+高级选项：
+  -ft 使用Perl5正则从文件名中提取歌曲标题并设置标题
+      示例：itagedit -ft s/.*-|.mp3// 刘若英-听说.mp3 将“刘若英-听说.mp3”的标题设置为“听说”
+  -fp 使用Perl5正则从文件名中提取艺术家并设置艺术家
+      示例：itagedit -fp s/-.*// 刘若英-听说.mp3 将“刘若英-听说.mp3”的艺术家设置为“刘若英”
+  -dp 使用Perl5正则从父目录的目录名中提取艺术家并设置艺术家
+      示例：itagedit -dp s/// ./Music/陈奕迅/好久不见.mp3 将“好久不见.mp3”的艺术家设置为“陈奕迅”
+  -fa 使用Perl5正则从文件名中提取唱片名并设置唱片名
+  -da 使用Perl5正则从父目录的目录名中提取唱片名并设置唱片名
+  -dc 在文件所在的目录中自动寻找一张png或者jpg图片作为封面图片
+  -fy 使用Perl5正则从文件名中提取年份并设置年份
+  -dy 使用Perl5正则从父目录的目录名中提取年份并设置年份
+  -fg 使用Perl5正则从文件名中提取歌曲风格并设置歌曲风格
+  -dg 使用Perl5正则从父目录的目录名中提取歌曲风格并设置歌曲风格
+  -fn 使用Perl5正则从文件名中提取音轨号并设置音轨号
+
+自动转换选项:
+  注意：慎用自动转换功能，很多MP3文件滥用id3v2标签，这将导致不可逆转的乱码出现
+  -o 将mp3文件原有标签转换为标准格式，如果文件中只含有id3v1标签，需指定id3v1标签的字符编码
+  -M 等同于“-o GBK”
+
+Report bugs to <liuxiang921@gmail.com>.
+iTagEdit Copyright (c) 1983-2010 刘向.  All rights reserved.
+EOF
+  exit;
+}
+
+
+sub add_lx_artist{
+  my($tag, $artist) = @_;
+  $mp3->select_id3v2_frame_by_descr("TPE1", undef);
+  $tag->add_frame("TPE1", 1, $artist);
+}
+
+sub add_lx_title {
+  my($tag, $title) = @_;
+  $mp3->select_id3v2_frame_by_descr("TIT2", undef);
+  $tag->add_frame("TIT2", 1, $title);
+}
+
+sub add_lx_album{
+  my($tag, $album) = @_;
+  $mp3->select_id3v2_frame_by_descr("TALB", undef);
+  $tag->add_frame("TALB", 1, $album);
+}
+
+sub add_lx_cover {
+  my($tag, $file_name) = @_;
+  my $mime;
+  if ($file_name =~ /(\.jpg|\.jpeg)$/i) {
+    $mime = "image/jpeg";
+  } elsif ($file_name =~ /\.png$/i) {
+    $mime = "image/png";
+  } else {
+    warn "Image file must be JPEG or PNG file. ";
+    return;
+  }
+  my $fh;
+  open $fh, "<", $file_name or warn "Can't open image file: $file_name. $!";
+  return unless $fh;
+  binmode $fh;
+  my $img_data;
+  $img_data .= $_ while <$fh>;
+  $mp3->select_id3v2_frame_by_descr("APIC", undef);
+  $tag->add_frame("APIC", 0, $mime, "\x03", "", $img_data);
+}
+
+sub add_lx_year {
+  my($tag, $year) = @_;
+  $mp3->select_id3v2_frame_by_descr("TYER", undef);
+  $tag->add_frame("TYER", $year);
+}
+
+sub add_lx_genre {
+  my($tag, $genre) = @_;
+  $mp3->select_id3v2_frame_by_descr("TCON", undef);
+  $tag->add_frame("TCON", 0, $genre);
+}
+
+sub add_lx_track_num {
+  my($tag, $track_num) = @_;
+  $mp3->select_id3v2_frame_by_descr("TRCK", undef);
+  $tag->add_frame("TRCK", $track_num);
+}
+
+#process args
+my($t,  #标题
+   $p,  #艺术家
+   $a,   #唱片
+   $y,    #年代
+   $g,   #风格
+   $c,   #封面图片
+   $n,  #音轨编号
+   $ft,         #从文件名获取标题
+   $fp, $dp,    #从文件名或者目录名获取艺术家
+   $fa, $da,    #从文件名或者目录名获取唱片名称
+   $fy, $dy,    #从文件名或者目录名获取年代
+   $fg, $dg,        #从文件名或者目录名获取风格
+   $dc,          #使用当前目录中的第一张图片作为封面
+   $fn,     #从文件名或者目录名获取音轨编号
+   $o,      #半自动转换已有的Tag到标准格式,当mp3文件中只有id3v1标签时，用户需要指定id3v1的编码格式
+   $M,      #自动转换已有的Tag到标准格式,当mp3文件中只有id3v1标签时，默认使用GBK编码进行转换
+   $h
+  );
+
+GetOptions(
+           "t=s" => \$t,
+           "p=s" => \$p,
+           "a=s" => \$a,
+           "y=i" => \$y,
+           "g=s" => \$g,
+           "c=s" => \$c,
+           "n=i" => \$n,
+           "o=s" => \$o,
+           "ft=s" => \$ft,
+           "fp=s" => \$fp,
+           "dp=s" => \$dp,
+           "fa=s" => \$fa,
+           "da=s" => \$da,
+           "fy=s" => \$fy,
+           "dy=s" => \$dy,
+           "fg=s" => \$fg,
+           "dg=s" => \$dg,
+           "dc" => \$dc,
+           "fn=s" => \$fn,
+           "M" => \$M,
+           "h" => \$h,
+           "help" => \$h
+);
+
+usage() if scalar @ARGV eq 0;
+
+my $file_name = shift @ARGV;
+exit unless $file_name;
+
+
+($rela_path = $file_name) =~ s#^\./##;
+$abso_path = $ENV{PWD} . "/" . $rela_path;
+$parent_name = basename dirname $abso_path;
+$parent_name =~ s#^.*/##;
+$mp3 = MP3::Tag->new($file_name);
+$mp3->get_tags();
+if ($M) {
+  $o = "GBK";
+}
+if ($o) {
+  if ( exists $mp3->{ID3v1} || exists $mp3->{ID3v2}){
+    my($title, $track, $palyer, $album, $comment, $year, $genre) = $mp3->autoinfo() ;
+    if (exists $mp3->{ID3v1} && !exists $mp3->{ID3v2}) {
+      #转换编码
+      $title = decode($o, $title);
+      $player = decode($o, $player);
+      $album = decode($o, $album);
+      $comment = decode($o, $comment);
+      $id3v2 = $mp3->new_tag("ID3v2");
+    }
+
+    $mp3->{ID3v1}->remove_tag if exists $mp3->{ID3v1};
+    $id3v2 = $mp3->{ID3v2} if exists $mp3->{ID3v2};
+    add_lx_title($id3v2, $title);
+    add_lx_track_num($id3v2, $track);
+    add_lx_artist($id3v2, $player);
+    add_lx_album($id3v2, $album);
+    add_lx_year($id3v2, $year);
+    add_lx_genre($id3v2, $genre);
+    $id3v2->write_tag();
+  }
+  exit;
+
+}
+
+
+if (exists $mp3->{ID3v2}) {
+  $id3v2 = $mp3->{ID3v2};
+} else {
+  $id3v2 = $mp3->new_tag("id3v2");
+}
+
+if ($ft) {
+  $title =  decode "utf8", $file_name;
+  $title =~ s#^.*/##;
+  $ft = decode "utf8", $ft;
+  eval "\$title =~ $ft";
+  add_lx_title($id3v2, $title);
+}
+
+if ($t) {
+  $title = decode("utf8", $t);
+  add_lx_title($id3v2, $title);
+}
+
+
+if ($fp) {
+  $player = decode "utf8", $file_name;
+  $fp = decode "utf8", $fp;
+  $player =~ s#^.*/##;
+  eval "\$player =~ $fp";
+  add_lx_artist($id3v2, $player);
+}
+
+
+if ($dp) {
+  $player = decode "utf8", $parent_name;
+  $dp = decode "utf8", $dp;
+  eval "\$player =~ $dp";
+  add_lx_artist($id3v2, $player);
+}
+
+if ($p) {
+  $player = decode("utf8", $p);
+  add_lx_artist $id3v2, $player;
+}
+
+
+if ($fa) {
+  $album = decode "utf8", $file_name;
+  $fa = decode "utf8", $fa;
+  $album =~ s#^.*/##;
+  eval "\$album =~ $fa";
+  add_lx_album($id3v2, $album);
+}
+
+
+if ($da) {
+  $album = decode "utf8", $parent_name;
+  $da = decode "utf8", $da;
+  eval "\$album =~ $da";
+  add_lx_album($id3v2, $album);
+}
+
+if ($a) {
+  $album = decode("utf8", $a);
+  add_lx_album $id3v2, $album;
+}
+
+
+if ($fy) {
+  $year = decode "utf8", $file_name;
+  $fy = decode "utf8", $fy;
+  $year =~ s#^.*/##;
+  eval "\$year =~ $fy";
+  add_lx_year($id3v2, $year);
+}
+
+
+if ($dy) {
+  $year = decode "utf8", $parent_name;
+  $dy = decode "utf8", $dy;
+  eval "\$year =~ $dy";
+  add_lx_year($id3v2, $year);
+}
+
+if ($y) {
+  $year = $y;
+  add_lx_year($id3v2, $year);
+}
+
+
+if ($fg) {
+  $genre = decode "utf8", $file_name;
+  $fg = decode "utf8", $fg;
+  $genre =~ s#^.*/##;
+  eval "\$genre =~ $fg";
+  add_lx_genre($id3v2, $genre);
+}
+
+
+if ($dg) {
+  $genre = decode "utf8", $parent_name;
+  $dg = decode "utf8", $dg;
+  eval "\$genre =~ $dg";
+  add_lx_genre($id3v2, $genre);
+}
+if ($g) {
+  $genre = decode("utf8", $g);
+  add_lx_genre($id3v2, $genre);
+}
+
+if ($dc) {
+  my $dir = dirname $abso_path;
+  $cover =  <$dir/*.{png,PNG,jpg,JPG,jpeg,JPEG}>;
+  add_lx_cover($id3v2, $cover);
+}
+
+if ($c) {
+  $cover = encode("utf8", $c);
+  add_lx_cover($id3v2, $cover);
+}
+
+
+if ($fn) {
+  my $track_num;
+  $track_num = decode "utf8", $file_name;
+  $fn = decode "utf8", $fn;
+  $track_num =~ s#^.*/##;
+  eval "\$track_num =~ $fn";
+  add_lx_track_num($id3v2, $track_num);
+}
+if ($n) {
+  add_lx_track_num($id3v2, $n);
+}
+
+$id3v2->write_tag();
