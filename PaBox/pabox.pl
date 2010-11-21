@@ -22,7 +22,7 @@ for (@ARGV) {
   } else {
     my ($list_id) =~ /(\d+)\D*$/;
     $list_url .= $list_id;
-  }
+  } 
   my $list_html = get($list_url);
 
   my @track_list;
