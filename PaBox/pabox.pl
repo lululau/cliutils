@@ -15,7 +15,7 @@ binmode STDOUT, "encoding(utf8)";
 
 my $ii = 1;
 for (@ARGV) {
-  init_progress(message => "正在初始化下载列表 ... ", count => 5);
+  init_progress(message => "正在初始化下载列表 ... ", count => @ARGV + 0);
   my $list_url = 'http://www.8box.cn/radio/list/';
   if (/^\d+$/) {
     $list_url .= $_;
@@ -33,11 +33,10 @@ for (@ARGV) {
   init_progress(message => "正在初始化下载列表 ... ", count => @track_lines - 5);
   for (@track_lines) {
     $i++;
-    next if $i <= 4;
     my $track = PaBox::Track::parse($_, $cover_lines[$i - 1]);
-    $track->title(decode "utf8", $track->title());
-    $track->artist(decode "utf8", $track->artist());
-    $track->album_name(decode "utf8", $track->album_name());
+    $track->title($track->title());
+    $track->artist($track->artist());
+    $track->album_name($track->album_name());
     push @track_list, $track;    
     update_progress($i);
     if ($i == @track_lines) {
@@ -86,8 +85,10 @@ for (@ARGV) {
 					   }
 					 }
 				       });
+    eval {
     my $itag_writer = ITagEdit::ITagWriter->new(file_name => $mp3_file_name);
     $itag_writer->write(title => $title, artist => $artist, album => $album, cover => get($cover));
+    };
     $ii++;
     print "\n";
     #printf "%s<>%s<>%s<>%s<>%s\n", $title, $artist, $album, $cover, $location;
