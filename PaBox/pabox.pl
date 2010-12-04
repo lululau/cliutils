@@ -34,9 +34,15 @@ for (@ARGV) {
   for (@track_lines) {
     $i++;
     my $track = PaBox::Track::parse($_, $cover_lines[$i - 1]);
-    $track->title($track->title());
-    $track->artist($track->artist());
-    $track->album_name($track->album_name());
+    eval {$track->title(decode "utf8", $track->title())};
+    $track->title($track->title()) if $@;
+    $@ = undef;
+    eval {$track->artist(decode "utf8", $track->artist())};
+    $track->artist($track->artist()) if $@;
+    $@ = undef;
+    eval {$track->album_name(decode "utf8", $track->album_name())};
+    $track->album_name($track->album_name()) if $@;
+    $@ = undef;
     push @track_list, $track;    
     update_progress($i);
     if ($i == @track_lines) {
