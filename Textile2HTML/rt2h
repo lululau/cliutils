@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+$: << "/Users/liuxiang/casecode/mygithub/cliutils/Textile2HTML"
+
 require "rubygems"
 gem "activesupport", "= 2.3.5"
 gem "actionpack", "= 2.3.5"
