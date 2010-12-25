@@ -1,0 +1,23 @@
+#!/bin/bash
+
+if [ $# == "0" ]
+then
+    TEMP_FILENAME="lxpreview$$.html"
+    while read line
+    do
+        echo $line >> /tmp/$TEMP_FILENAME
+    done
+    qlmanage -p /tmp/$TEMP_FILENAME &>/dev/null
+    rm /tmp/$TEMP_FILENAME
+elif [ $1 == "-t" ]
+then
+    TEMP_FILENAME="lxpreview$$.$2"
+    while read line
+    do
+        echo $line >> /tmp/$TEMP_FILENAME
+    done
+    qlmanage -p /tmp/$TEMP_FILENAME &>/dev/null
+    rm /tmp/$TEMP_FILENAME
+else
+    qlmanage -p "$@" &> /dev/null &
+fi
