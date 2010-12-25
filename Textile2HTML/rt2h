@@ -2655,13 +2655,21 @@ end
 text = ""
 ARGF.each_line {|line| text += line}
 $f = Redmine::WikiFormatting::Textile::Formatter.new(text);
+puts '<html>'
+puts '<head>'
 puts '<meta http-equiv="Content" content-type="text/html; charset=UTF-8">'
 puts "<style>"
 puts application_css
 puts jstoolbar_css
 puts scm_css
 puts "</style>"
+puts '</head>'
 html = $f.to_html
 html.gsub! /<table>/, "<table border='1' style='border-collapse: collapse'>"
 html.gsub! /<td>\s*<\/td>/, "<td>&nbsp;</td>"
+puts '<body>'
+puts '<div class="wiki">'
 puts html
+puts '</div>'
+puts '</body>'
+puts '</html>'
