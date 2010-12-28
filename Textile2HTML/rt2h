@@ -2537,6 +2537,7 @@ div.action_D { background: #f88 }
 div.action_A { background: #bfb }
 
 /************* CodeRay styles *************/
+.syntaxhl {font-family: Courier}
 .syntaxhl div {display: inline;}
 .syntaxhl .no { padding: 2px 4px 2px 4px; background-color: #eee; margin:0 }
 .syntaxhl .code pre { overflow: auto }
