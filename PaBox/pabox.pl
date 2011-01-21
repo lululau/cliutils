@@ -16,7 +16,7 @@ binmode STDOUT, "encoding(utf8)";
 my $ii = 1;
 for (@ARGV) {
   init_progress(message => "正在初始化下载列表 ... ", count => @ARGV + 0);
-  my $list_url = 'http://www.8box.cn/radio/list/';
+  my $list_url = 'http://www.8box.com/radio/list/';
   if (/^\d+$/) {
     $list_url .= $_;
   } else {
