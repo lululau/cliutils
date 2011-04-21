@@ -1,0 +1,11 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use utf8;
+use Lingua::EN::Inflect qw(PL classical);
+# classical(1);
+while (<>) {
+    chomp;
+    print PL($_), "\n";
+}
