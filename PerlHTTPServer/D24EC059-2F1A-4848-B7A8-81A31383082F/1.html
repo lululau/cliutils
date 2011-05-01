@@ -10,29 +10,20 @@ a:link, a:visited {
 
 a {text-decoration: none;}
 </style>
-</head>
+<script type="text/javascript" src="/D24EC059-2F1A-4848-B7A8-81A31383082F/jquery-1.4.3.min.js"></script>
+<script type="text/javascript" src="/D24EC059-2F1A-4848-B7A8-81A31383082F/fancybox/jquery.mousewheel-3.0.4.pack.js"></script>
+<script type="text/javascript" src="/D24EC059-2F1A-4848-B7A8-81A31383082F/fancybox/jquery.fancybox-1.3.4.pack.js"></script>
+<link rel="stylesheet" type="text/css" href="/D24EC059-2F1A-4848-B7A8-81A31383082F/fancybox/jquery.fancybox-1.3.4.css" media="screen"/>
+<link href="/D24EC059-2F1A-4848-B7A8-81A31383082F/uploadify/uploadify.css" type="text/css" rel="stylesheet" />
+<script type="text/javascript" src="/D24EC059-2F1A-4848-B7A8-81A31383082F/uploadify/swfobject.js"></script>
+<script type="text/javascript" src="/D24EC059-2F1A-4848-B7A8-81A31383082F/uploadify/jquery.uploadify.v2.1.4.min.js"></script>
 
-<body style="background: rgb(255, 255, 255) url(/D24EC059-2F1A-4848-B7A8-81A31383082F/Playtime_background_yellow.jpg) repeat scroll top left; margin: 0pt; ">
+<script>
+$(document).ready(function() {
+    $("a#show_upload_box").fancybox({
+	'transitionIn'	: 'elastic',
+	'transitionOut'	: 'elastic'
+    });
 
-<div id="container" style="position: relative; width: 700px; margin-left: auto; margin-right: auto;
-  margin-top: 15px; margin-bottom: 45px; background: transparent
-  url(/D24EC059-2F1A-4848-B7A8-81A31383082F/Playtime_page_bg-6.png) repeat scroll top
-  left;">
-
-<div style="width: 700px;  height: 20px; left: 0px; position:
-  absolute; top: 0px; width: 700px; z-index: 1; "">
-  <img src="/D24EC059-2F1A-4848-B7A8-81A31383082F/Playtime_header_bg.jpg" alt=""
-  style="border: none; height: 20px; width: 700px; " />
-</div>
-
-
-<div style="background: url(/D24EC059-2F1A-4848-B7A8-81A31383082F/sasa.png); height: 275px; width: 645px; left: 22px;
-  position: absolute; top: 28px; width: 645px; z-index: 1; ">
-  <span style="font-family: Chalkboard, Monaco, Courier; font-size:
-  32px; text-shadow: 0px 1px 0px #ffffff; position: absolute; left:
-  20px; top: 50px;">hello标题</span>
-</div>
-
-<div id="content" style="background: rgb(255, 255, 255) url(/D24EC059-2F1A-4848-B7A8-81A31383082F/sbsb.png) repeat scroll top left; width: 645px; left: 22px;
-  position: absolute; top: 303px; width: 645px; z-index: 1;">
-  <table style="border-spacing: 0px; width: 640px;">
+    $('#file_upload').uploadify({
+      'uploader'  : '/D24EC059-2F1A-4848-B7A8-81A31383082F/uploadify/uploadify.swf',
