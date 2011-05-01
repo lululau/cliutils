@@ -224,7 +224,7 @@ while (my $client = $server->accept) {
 		$filename =~ s#/$##;
 		$filename = decode "utf8", $filename;
 		my $file_count = 0;
-		for (readdir $dirh) {
+		for (sort {$a cmp $b} readdir $dirh) {
 		  next if ! $show_all_files && $_ =~ /^\..*/ && $_ ne "..";
 		  next if $_ eq ".";
 		  $file_count++;
