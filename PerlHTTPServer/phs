@@ -84,7 +84,6 @@ my $server = IO::Socket::INET->new(
 			    );
 
 while (my $client = $server->accept) {
-
   # 启动线程处理TCP请求
   async(sub {
 	  
@@ -314,7 +313,8 @@ EOF2
 		$response .= "Server: lulu_simple_http_server/1.0.0$CRLF";
 		$response .= "$CRLF";
 		$response .= $html;
-		print $client $response;	      
+		
+		print $client encode("utf8", $response);	      
 		
 	      }	      
 	    } else {

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+svn info $1 2>&- | sed -n '/^URL:/{p;q;}' | cut -d ' ' -f2 | perl -pe '
+BEGIN {
+  use utf8;
+  use Encode qw(encode decode);
+  our $enc = $ENV{LANG} || $ENV{"LC_ALL"};
+  $enc = "zh_CN.UTF-8" unless $enc && $enc =~ /[_a-zA-Z]+\.[-\w\d]+/;
+  $enc = (split /\./, $enc)[1];
+  $enc = "utf8" if $enc =~ /utf-8/i;
+}
+s#^http://.*?@?(.*)/#http://$1/#;
+s#%([\dA-Z]{2})#pack "c*", hex $1#ge;
+$_ = decode "utf8", $_;
+$_ = encode $enc, $_;
+
+'
