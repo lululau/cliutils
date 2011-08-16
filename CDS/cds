@@ -4,7 +4,7 @@ _cds() {
     files=$(find . -maxdepth 1 -type d -not -name '.*')
     lines=$(echo "$files" | wc -l | perl -pe 's#\D##g')
     d=$(find . -maxdepth 1 -type d -not -name '.*' | sed '1!G;h;$!d' | perl -pe 's#./#sprintf("%0'${#lines}'d", $.) . ": "#e;s# #/#g')
-    COMPREPLY=( $(compgen -W "${d}")) 
+    COMPREPLY=( $(compgen -W "${d}") "") 
     i=0
     for item in ${COMPREPLY[*]}
     do
