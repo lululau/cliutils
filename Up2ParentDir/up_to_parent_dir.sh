@@ -21,6 +21,8 @@ function up() {
     fi
     for ((i = 0; i < count; i++)) 
     do
-	cd ..
+	dir=$dir"../"
     done
+    dir=${dir:=.}
+    cd $dir
 }
