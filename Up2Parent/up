@@ -1,0 +1,36 @@
+
+_up()
+{
+    pwd=$PWD/
+    pwd=$(echo -n $pwd | perl -pe '
+$i=0;
+s#/#//#g;
+$_ = reverse;
+$i++ while s#//#"/}${i}{"#e;
+$_=reverse;
+')
+    COMPREPLY=($pwd " ")
+}
+
+function up() {
+    if [ "$#" -eq 0 ]
+    then
+	count=2
+    elif [ "$#" -eq 1 ] && echo $1 | grep -q '^[0-9]\+$'
+    then
+	count=$1
+    else 
+	echo 'up <count>' >&2
+	return
+    fi
+    for ((i = 0; i < count; i++)) 
+    do
+	dir=$dir"../"
+    done
+    dir=${dir:=.}
+    cd $dir
+    unset dir
+}
+
+
+complete -o nospace -F _up up a

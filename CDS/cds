@@ -1,0 +1,29 @@
+_cds() {
+    COMPREPLY=()
+    local file d i item
+    files=$(find . -maxdepth 1 -type d -not -name '.*')
+    lines=$(echo "$files" | wc -l | perl -pe 's#\D##g')
+    d=$(find . -maxdepth 1 -type d -not -name '.*' | sed '1!G;h;$!d' | perl -pe 's#./#sprintf("%0'${#lines}'d", $.) . ": "#e;s# #/#g')
+    COMPREPLY=( $(compgen -W "${d}")) 
+    i=0
+    for item in ${COMPREPLY[*]}
+    do
+	COMPREPLY[$i]=$(echo $item | perl -pe 's#/# #g')
+	((i++))
+    done
+
+ }
+
+function cds() {
+    local line
+    if [ "$#" -eq 1 ] && echo $1 | grep -q '^[0-9]\+$'
+    then
+	line=$1
+	cd "$(find . -maxdepth 1 -type d -not -name '.*' | sed '1!G;h;$!d' |sed -n ${line}p)"
+    else
+	echo "cds <count>" >&2
+    fi
+}
+
+
+complete -o nospace -F _cds cds
