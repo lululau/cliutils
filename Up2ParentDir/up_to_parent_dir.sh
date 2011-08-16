@@ -25,4 +25,5 @@ function up() {
     done
     dir=${dir:=.}
     cd $dir
+    unset dir
 }
