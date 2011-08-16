@@ -16,7 +16,7 @@ function up() {
     then
 	count=$1
     else 
-	echo 'up <count>' 2>&1
+	echo 'up <count>' >&2
 	return
     fi
     for ((i = 0; i < count; i++)) 
