@@ -6,7 +6,7 @@ _up()
 $i=0;
 s#/#//#g;
 $_ = reverse;
-$i++ while s#//#"/}${i}{"#e;
+$i++ while s#//#reverse "{${i}}/"#e;
 $_=reverse;
 ')
     COMPREPLY=($pwd " ")
