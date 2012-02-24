@@ -1,6 +1,6 @@
 #!/bin/bash
 
-svn info $1 2>&- | sed -n '/^URL:/{p;q;}' | cut -d ' ' -f2 | perl -pe '
+svn info "$1" 2>&- | sed -n '/^URL:/{p;q;}' | cut -d ' ' -f2 | perl -pe '
 BEGIN {
   use utf8;
   use Encode qw(encode decode);
@@ -13,5 +13,6 @@ s#^http://.*?@?(.*)/#http://$1/#;
 s#%([\dA-Z]{2})#pack "c*", hex $1#ge;
 $_ = decode "utf8", $_;
 $_ = encode $enc, $_;
+s#http://[^@]*@#http://#
 
 '
